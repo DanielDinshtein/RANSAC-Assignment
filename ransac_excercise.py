@@ -7,11 +7,11 @@ import pandas as pd
 def get_random_sample_pair(samples):
     dx = 0
     selected_samples = []
-    while (dx == 0):
+    while dx == 0:
         # keep going until we get a pair with dx != 0
         selected_samples = []
         for i in [0, 1]:
-            index = random.randint(0, len(samples) - 1);
+            index = random.randint(0, len(samples) - 1)
             x = samples[index]['x']
             y = samples[index]['y']
             selected_samples.append({'x': x, 'y': y})
@@ -22,7 +22,7 @@ def get_random_sample_pair(samples):
 
 
 # generate a line model (a,b) from a pair of (x,y) samples
-# sample is a dictionary with x and y keys
+# sample1,2 -  is a dictionary with x and y keys
 def modelFromSamplePair(sample1, sample2):
     dx = sample1['x'] - sample2['x']
     if dx == 0:  # avoid division by zero later
@@ -74,7 +74,7 @@ def ransac(samples, iterations, cutoff_dist):
         m = modelFromSamplePair(sample1, sample2)
         score = scoreModelAgainstSamples(m, samples, cutoff_dist)
 
-        if (min_score < 0 or score < min_score):
+        if min_score < 0 or score < min_score:
             min_score = score
             min_m = m
 
@@ -85,7 +85,7 @@ def ransac(samples, iterations, cutoff_dist):
 
 
 def read_samples(filename):
-    # reads samples from a csv file and returns them as list of sample dictionaries (each sample is dictionary with 'x' and 'y' keys)
+    # Read samples from a csv file and returns them as list of sample dictionaries (each sample is dictionary with 'x' and 'y' keys)
 
     df = pd.read_csv(filename)
     samples = df[['x', 'y']].to_dict(orient='records')
@@ -140,6 +140,7 @@ def plot_model_and_samples(model, samples):
     y_max = model['model']['a'] * x_max + model['model']['b']
     plt.plot(xs, ys, '.', [x_min, x_max], [y_min, y_max], '-r')
     plt.grid()
+    plt.show()
 
 
 # ======== some basic pyspark example ======
