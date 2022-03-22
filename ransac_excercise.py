@@ -49,7 +49,7 @@ def scoreModelAgainstSamples(model, samples, cutoff_dist=20):
     for sample_i in range(0, len(samples) - 1):
         sample = samples[sample_i]
         pred_y = model['a'] * sample['x'] + model['b']
-        score = min(abs(sample['y'] - pred_y), CUTOFF_DIST)
+        score = min(abs(sample['y'] - pred_y), cutoff_dist)
         totalScore += score
 
     # print("model ",model, " score ", totalScore)
@@ -105,7 +105,8 @@ def generate_samples(n_samples=1000, n_outliers=50, b=1, output_path=None):
                                           n_informative=1, noise=10,
                                           coef=True, bias=b)
 
-    print("generated samples around model: a = {} b = {} with {} samples + {} outliers".format(coef.item(0), b, n_samples,
+    print(
+        "generated samples around model: a = {} b = {} with {} samples + {} outliers".format(coef.item(0), b, n_samples,
                                                                                              n_outliers))
     if n_outliers > 0:
         # Add outlier data
@@ -129,7 +130,7 @@ def generate_samples(n_samples=1000, n_outliers=50, b=1, output_path=None):
 
 def plot_model_and_samples(model, samples):
     import matplotlib.pyplot as plt
-    #plt.rcParams['figure.figsize'] = [20, 10]
+    # plt.rcParams['figure.figsize'] = [20, 10]
     plt.figure()
     xs = [s['x'] for s in samples]
     ys = [s['y'] for s in samples]
@@ -140,17 +141,18 @@ def plot_model_and_samples(model, samples):
     plt.plot(xs, ys, '.', [x_min, x_max], [y_min, y_max], '-r')
     plt.grid()
 
+
 # ======== some basic pyspark example ======
 def some_basic_pyspark_example():
     from pyspark import SparkContext
-    num_cores_to_use = 8 # depends on how many cores you have locally. try 2X or 4X the amount of HW threads
+    num_cores_to_use = 8  # depends on how many cores you have locally. try 2X or 4X the amount of HW threads
 
     # now we create a spark context in local mode (i.e - not on cluster)
     sc = SparkContext("local[{}]".format(num_cores_to_use), "My First App")
 
     # function we will use in parallel
     def square_num(x):
-        return x*x
+        return x * x
 
     rdd_of_num = sc.parallelize([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16])
 
@@ -164,15 +166,14 @@ def some_basic_pyspark_example():
 
     # create dataframe from the rdd of the numbers (call the column my_numbers)
     df = session.createDataFrame(rdd_of_num, ['my_numbers'])
-    df = df.withColumn('squares', df['my_numbers']*df['my_numbers'])
+    df = df.withColumn('squares', df['my_numbers'] * df['my_numbers'])
     sum_of_squares = df['squared'].sum()
-
 
 
 # ========= main ==============
 
 if __name__ == '__main__':
-    path_to_samples_csv = '/mnt/temp/rem/users/pinir/samples_for_line_a_27.0976088174_b_12.234.csv'
+    path_to_samples_csv = 'samples_for_line_a_48.9684912365_b_44.234.csv'
     samples = read_samples(path_to_samples_csv)
     best_model = ransac(samples, iterations=5000, cutoff_dist=20)
 
