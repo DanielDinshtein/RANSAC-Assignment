@@ -1,9 +1,9 @@
-import numpy as np
 import random
-import pandas as pd
 
 
 # function that picks a pair of random samples from the list of samples given (it also makes sure they do not have the same x)
+
+
 def get_random_sample_pair(samples):
     dx = 0
     selected_samples = []
@@ -58,7 +58,7 @@ def scoreModelAgainstSamples(model, samples, cutoff_dist=20):
 
 # the function that runs the ransac algorithm (serially)
 # gets as input the number of iterations to use and the cutoff_distance for the fit score
-def ransac(samples, iterations, cutoff_dist):
+def parallel_ransac(samples, iterations, cutoff_dist):
     # runs ransac algorithm for the given amount of iterations, where in each iteration it:
     # 1. randomly creates a model from the samples by calling m = modelFromSamplesFunc(samples)
     # 2. calculating the score of the model against the sample set
@@ -79,68 +79,6 @@ def ransac(samples, iterations, cutoff_dist):
             min_m = m
 
     return {'model': min_m, 'score': min_score}
-
-
-# ========= utility functions ============
-
-
-def read_samples(filename):
-    # Read samples from a csv file and returns them as list of sample dictionaries (each sample is dictionary with 'x' and 'y' keys)
-
-    df = pd.read_csv(filename)
-    samples = df[['x', 'y']].to_dict(orient='records')
-    return samples
-
-
-def generate_samples(n_samples=1000, n_outliers=50, b=1, output_path=None):
-    # generates new samples - samples will consist of n_samples around some line + n_outliers that are not around the same line
-    # gets as parameters:
-    # n_samples: the number of inlier samples
-    # n_outliers: the number of outlier samples
-    # b: the b of the line to use ( the slope - a - will be generated randomly)
-    # output_path: optional parameter for also writing out the samples into csv
-
-    from sklearn import linear_model, datasets
-    X, y, coef = datasets.make_regression(n_samples=n_samples, n_features=1,
-                                          n_informative=1, noise=10,
-                                          coef=True, bias=b)
-
-    print(
-        "generated samples around model: a = {} b = {} with {} samples + {} outliers".format(coef.item(0), b, n_samples,
-                                                                                             n_outliers))
-    if n_outliers > 0:
-        # Add outlier data
-        np.random.seed(0)
-        X[:n_outliers] = 2 * np.random.normal(size=(n_outliers, 1))
-        y[:n_outliers] = 10 * np.random.normal(size=n_outliers)
-
-    d = {'x': X.flatten(), 'y': y.flatten()}
-    df = pd.DataFrame(data=d)
-    samples = []
-    for i in range(0, len(X) - 1):
-        samples.append({'x': X[i][0], 'y': y[i]})
-    ref_model = {'a': coef.item(0), 'b': b}
-
-    if output_path is not None:
-        import os
-        file_name = os.path.join(output_path, "samples_for_line_a_{}_b_{}.csv".format(coef.item(0), b))
-        df.to_csv(file_name)
-    return samples, coef, ref_model
-
-
-def plot_model_and_samples(model, samples):
-    import matplotlib.pyplot as plt
-    # plt.rcParams['figure.figsize'] = [20, 10]
-    plt.figure()
-    xs = [s['x'] for s in samples]
-    ys = [s['y'] for s in samples]
-    x_min = min(xs)
-    x_max = max(xs)
-    y_min = model['model']['a'] * x_min + model['model']['b']
-    y_max = model['model']['a'] * x_max + model['model']['b']
-    plt.plot(xs, ys, '.', [x_min, x_max], [y_min, y_max], '-r')
-    plt.grid()
-    plt.show()
 
 
 # ======== some basic pyspark example ======
@@ -169,14 +107,3 @@ def some_basic_pyspark_example():
     df = session.createDataFrame(rdd_of_num, ['my_numbers'])
     df = df.withColumn('squares', df['my_numbers'] * df['my_numbers'])
     sum_of_squares = df['squared'].sum()
-
-
-# ========= main ==============
-
-if __name__ == '__main__':
-    path_to_samples_csv = 'input files/samples_for_line_a_48.9684912365_b_44.234.csv'
-    samples = read_samples(path_to_samples_csv)
-    best_model = ransac(samples, iterations=5000, cutoff_dist=20)
-
-    # now plot the model
-    plot_model_and_samples(best_model, samples)

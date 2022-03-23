@@ -1,0 +1,7 @@
+{
+    "os_env_variables": {
+        "java": "C:/Program Files/Java/jdk1.8.0_241",
+        "spark": "C:/spark_setup/spark-3.0.0-bin-hadoop2.7",
+        "hadoop": "C:/spark_setup/spark-3.0.0-bin-hadoop2.7/hadoop"
+    }
+}
