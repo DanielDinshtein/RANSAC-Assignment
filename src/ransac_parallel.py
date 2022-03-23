@@ -1,5 +1,51 @@
 import random
 
+from src.utils import init_spark
+
+
+# =========    Parallel     ============
+
+
+def extract_data(spark, file_path):
+    df = spark.read.options(header=True).csv(file_path)
+    return df
+
+
+def transform_data(df):
+    pass
+
+
+# the function that runs the ransac algorithm (parallel)
+# gets as input the number of iterations to use and the cutoff_distance for the fit score
+def parallel_ransac(file_path, iterations, cutoff_dist):
+    # runs ransac algorithm for the given amount of iterations, where in each iteration it:
+    # 1. randomly creates a model from the samples by calling m = modelFromSamplesFunc(samples)
+    # 2. calculating the score of the model against the sample set
+    # 3. keeps the model with the best score
+    # after all iterations are done - returns the best model and score
+
+    spark, sc = init_spark()
+
+    df = extract_data(spark, file_path)
+
+    min_m = {}
+    min_score = -1
+    for i in range(1, iterations):
+        if i % 10 == 0:
+            print(i)
+        sample1, sample2 = get_random_sample_pair(samples)
+        m = modelFromSamplePair(sample1, sample2)
+        score = scoreModelAgainstSamples(m, samples, cutoff_dist)
+
+        if min_score < 0 or score < min_score:
+            min_score = score
+            min_m = m
+
+    return {'model': min_m, 'score': min_score}
+
+
+# =========    Serially     ============
+
 
 # function that picks a pair of random samples from the list of samples given (it also makes sure they do not have the same x)
 
@@ -58,27 +104,27 @@ def scoreModelAgainstSamples(model, samples, cutoff_dist=20):
 
 # the function that runs the ransac algorithm (serially)
 # gets as input the number of iterations to use and the cutoff_distance for the fit score
-def parallel_ransac(samples, iterations, cutoff_dist):
-    # runs ransac algorithm for the given amount of iterations, where in each iteration it:
-    # 1. randomly creates a model from the samples by calling m = modelFromSamplesFunc(samples)
-    # 2. calculating the score of the model against the sample set
-    # 3. keeps the model with the best score
-    # after all iterations are done - returns the best model and score
-
-    min_m = {}
-    min_score = -1
-    for i in range(1, iterations):
-        if i % 10 == 0:
-            print(i)
-        sample1, sample2 = get_random_sample_pair(samples)
-        m = modelFromSamplePair(sample1, sample2)
-        score = scoreModelAgainstSamples(m, samples, cutoff_dist)
-
-        if min_score < 0 or score < min_score:
-            min_score = score
-            min_m = m
-
-    return {'model': min_m, 'score': min_score}
+# def parallel_ransac(samples, iterations, cutoff_dist):
+#     # runs ransac algorithm for the given amount of iterations, where in each iteration it:
+#     # 1. randomly creates a model from the samples by calling m = modelFromSamplesFunc(samples)
+#     # 2. calculating the score of the model against the sample set
+#     # 3. keeps the model with the best score
+#     # after all iterations are done - returns the best model and score
+#
+#     min_m = {}
+#     min_score = -1
+#     for i in range(1, iterations):
+#         if i % 10 == 0:
+#             print(i)
+#         sample1, sample2 = get_random_sample_pair(samples)
+#         m = modelFromSamplePair(sample1, sample2)
+#         score = scoreModelAgainstSamples(m, samples, cutoff_dist)
+#
+#         if min_score < 0 or score < min_score:
+#             min_score = score
+#             min_m = m
+#
+#     return {'model': min_m, 'score': min_score}
 
 
 # ======== some basic pyspark example ======

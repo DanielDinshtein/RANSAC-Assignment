@@ -101,7 +101,14 @@ def init_os_environ():
 def init_spark():
     init_os_environ()
 
-    spark = SparkSession.builder.appName("HelloWorld").getOrCreate()
+    num_cores_to_use = "4"  # depends on how many cores you have locally. try 2X or 4X the amount of HW threads
+
+    spark = SparkSession.builder \
+        .appName("Parallel RANSAC") \
+        .config("spark.executor.cores", num_cores_to_use) \
+        .getOrCreate()
+
     sc = spark.sparkContext
     sc.setLogLevel("OFF")
+
     return spark, sc
