@@ -121,7 +121,7 @@ def generate_samples(n_samples=1000, n_outliers=50, b=1, output_path=None):
         samples.append({'x': X[i][0], 'y': y[i]})
     ref_model = {'a': coef.item(0), 'b': b}
 
-    if not output_path is None:
+    if output_path is not None:
         import os
         file_name = os.path.join(output_path, "samples_for_line_a_{}_b_{}.csv".format(coef.item(0), b))
         df.to_csv(file_name)
