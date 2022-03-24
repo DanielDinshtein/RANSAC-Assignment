@@ -1,5 +1,7 @@
 import random
 
+from pyspark.sql.types import DoubleType
+
 from src.utils import init_spark
 
 
@@ -7,12 +9,50 @@ from src.utils import init_spark
 
 
 def extract_data(spark, file_path):
+    """
+    Read samples from a csv file into Spark DataFrame.
+    Clean unnecessary columns & Cast to DoubleType .
+    Each sample contain 'x' and 'y'.
+
+    :param spark: Spark session
+    :param file_path: Path to the csv file
+    :return: The Spark DataFrame
+    """
+
     df = spark.read.options(header=True).csv(file_path)
+
+    df = df.withColumn("x", df["x"].cast(DoubleType())) \
+        .withColumn("y", df["y"].cast(DoubleType())) \
+        .drop("_c0")
+
     return df
 
 
-def transform_data(df):
-    pass
+def get_random_sample_pair(samples):
+    """
+    Picks a pair of random samples from the DataFrame of samples given.
+    * It also makes sure they do not have the same x.
+
+    :param samples: The Spark DataFrame of samples
+    :return: A Pair of samples as dictionary - {x,y}
+    """
+    dx = 0
+    selected_samples = []
+    row_list = samples.collect()
+    while dx == 0:
+        # keep going until we get a pair with dx != 0
+        selected_samples = []
+        for i in [0, 1]:
+            index = random.randint(0, samples.count() - 1)
+
+            x = row_list[index].__getitem__('x')
+            y = row_list[index].__getitem__('y')
+
+            selected_samples.append({'x': x, 'y': y})
+            # print("creator_samples ",i, " : ", creator_samples, " index ", index)
+        dx = selected_samples[0]['x'] - selected_samples[1]['x']
+
+    return selected_samples[0], selected_samples[1]
 
 
 # the function that runs the ransac algorithm (parallel)
@@ -26,7 +66,9 @@ def parallel_ransac(file_path, iterations, cutoff_dist):
 
     spark, sc = init_spark()
 
-    df = extract_data(spark, file_path)
+    samples = extract_data(spark, file_path)
+    samples.printSchema()
+    samples.show(truncate=False)
 
     min_m = {}
     min_score = -1
@@ -44,27 +86,27 @@ def parallel_ransac(file_path, iterations, cutoff_dist):
     return {'model': min_m, 'score': min_score}
 
 
-# =========    Serially     ============
+"""# =========    Serially     ============"""
 
 
 # function that picks a pair of random samples from the list of samples given (it also makes sure they do not have the same x)
 
 
-def get_random_sample_pair(samples):
-    dx = 0
-    selected_samples = []
-    while dx == 0:
-        # keep going until we get a pair with dx != 0
-        selected_samples = []
-        for i in [0, 1]:
-            index = random.randint(0, len(samples) - 1)
-            x = samples[index]['x']
-            y = samples[index]['y']
-            selected_samples.append({'x': x, 'y': y})
-            # print("creator_samples ",i, " : ", creator_samples, " index ", index)
-        dx = selected_samples[0]['x'] - selected_samples[1]['x']
-
-    return selected_samples[0], selected_samples[1]
+# def get_random_sample_pair(samples):
+#     dx = 0
+#     selected_samples = []
+#     while dx == 0:
+#         # keep going until we get a pair with dx != 0
+#         selected_samples = []
+#         for i in [0, 1]:
+#             index = random.randint(0, len(samples) - 1)
+#             x = samples[index]['x']
+#             y = samples[index]['y']
+#             selected_samples.append({'x': x, 'y': y})
+#             # print("creator_samples ",i, " : ", creator_samples, " index ", index)
+#         dx = selected_samples[0]['x'] - selected_samples[1]['x']
+#
+#     return selected_samples[0], selected_samples[1]
 
 
 # generate a line model (a,b) from a pair of (x,y) samples
