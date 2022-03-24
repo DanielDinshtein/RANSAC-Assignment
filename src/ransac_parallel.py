@@ -1,7 +1,8 @@
 import random
 
 from pyspark.sql.types import DoubleType
-
+import pyspark.sql.functions as F
+# from F import when, lit
 from src.utils import init_spark
 
 
@@ -53,6 +54,54 @@ def get_random_sample_pair(samples):
         dx = selected_samples[0]['x'] - selected_samples[1]['x']
 
     return selected_samples[0], selected_samples[1]
+
+
+def modelFromSamplePair(sample1, sample2):
+    dx = sample1['x'] - sample2['x']
+    if dx == 0:  # avoid division by zero later
+        dx = 0.0001
+
+    # model = <a,b> where y = ax+b
+    # so given x1,y1 and x2,y2 =>
+    #  y1 = a*x1 + b
+    #  y2 = a*x2 + b
+    #  y1-y2 = a*(x1 - x2) ==>  a = (y1-y2)/(x1-x2)
+    #  b = y1 - a*x1
+
+    a = (sample1['y'] - sample2['y']) / dx
+    b = sample1['y'] - sample1['x'] * a
+    return {'a': a, 'b': b}
+
+
+def scoreModelAgainstSamples(model, samples, cutoff_dist=20):
+    # predict the y using the model and x samples, per sample, and sum the abs of the distances between the real y
+    # with truncation of the error at distance cutoff_dist
+
+    totalScore = samples.withColumn('pred_y', model['a'] * samples['x'] + model['b']) \
+        .withColumn('distance', F.abs(samples['y'] - F.col('pred_y'))) \
+        .withColumn('score', F
+                    .when(F.col('distance') <= F.lit(cutoff_dist), F.col('distance'))
+                    .otherwise(F.lit(cutoff_dist))).select(F.sum('score')).collect()[0][0]
+
+    calculation_df = samples.withColumn('pred_y', model['a'] * samples['x'] + model['b'])
+    calculation_df = calculation_df.withColumn('distance', F.abs(calculation_df['y'] - calculation_df['pred_y'])) \
+        .withColumn('score',
+                    F.when(F.col('distance') <= F.lit(cutoff_dist), F.col('distance')).otherwise(
+                        F.lit(cutoff_dist)))
+
+    calculation_df.printSchema()
+    calculation_df.show(truncate=False)
+
+    x = 1
+
+    for sample_i in range(0, len(samples) - 1):
+        sample = samples[sample_i]
+        pred_y = model['a'] * sample['x'] + model['b']
+        score = min(abs(sample['y'] - pred_y), cutoff_dist)
+        totalScore += score
+
+    # print("model ",model, " score ", totalScore)
+    return totalScore
 
 
 # the function that runs the ransac algorithm (parallel)
@@ -111,37 +160,37 @@ def parallel_ransac(file_path, iterations, cutoff_dist):
 
 # generate a line model (a,b) from a pair of (x,y) samples
 # sample1,2 -  is a dictionary with x and y keys
-def modelFromSamplePair(sample1, sample2):
-    dx = sample1['x'] - sample2['x']
-    if dx == 0:  # avoid division by zero later
-        dx = 0.0001
-
-    # model = <a,b> where y = ax+b
-    # so given x1,y1 and x2,y2 =>
-    #  y1 = a*x1 + b
-    #  y2 = a*x2 + b
-    #  y1-y2 = a*(x1 - x2) ==>  a = (y1-y2)/(x1-x2)
-    #  b = y1 - a*x1
-
-    a = (sample1['y'] - sample2['y']) / dx
-    b = sample1['y'] - sample1['x'] * a
-    return {'a': a, 'b': b}
+# def modelFromSamplePair(sample1, sample2):
+#     dx = sample1['x'] - sample2['x']
+#     if dx == 0:  # avoid division by zero later
+#         dx = 0.0001
+#
+#     # model = <a,b> where y = ax+b
+#     # so given x1,y1 and x2,y2 =>
+#     #  y1 = a*x1 + b
+#     #  y2 = a*x2 + b
+#     #  y1-y2 = a*(x1 - x2) ==>  a = (y1-y2)/(x1-x2)
+#     #  b = y1 - a*x1
+#
+#     a = (sample1['y'] - sample2['y']) / dx
+#     b = sample1['y'] - sample1['x'] * a
+#     return {'a': a, 'b': b}
 
 
 # create a fit score between a list of samples and a model (a,b) - with the given cutoff distance
-def scoreModelAgainstSamples(model, samples, cutoff_dist=20):
-    # predict the y using the model and x samples, per sample, and sum the abs of the distances between the real y
-    # with truncation of the error at distance cutoff_dist
-
-    totalScore = 0
-    for sample_i in range(0, len(samples) - 1):
-        sample = samples[sample_i]
-        pred_y = model['a'] * sample['x'] + model['b']
-        score = min(abs(sample['y'] - pred_y), cutoff_dist)
-        totalScore += score
-
-    # print("model ",model, " score ", totalScore)
-    return totalScore
+# def scoreModelAgainstSamples(model, samples, cutoff_dist=20):
+#     # predict the y using the model and x samples, per sample, and sum the abs of the distances between the real y
+#     # with truncation of the error at distance cutoff_dist
+#
+#     totalScore = 0
+#     for sample_i in range(0, len(samples) - 1):
+#         sample = samples[sample_i]
+#         pred_y = model['a'] * sample['x'] + model['b']
+#         score = min(abs(sample['y'] - pred_y), cutoff_dist)
+#         totalScore += score
+#
+#     # print("model ",model, " score ", totalScore)
+#     return totalScore
 
 
 # the function that runs the ransac algorithm (serially)
