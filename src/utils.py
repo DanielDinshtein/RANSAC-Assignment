@@ -1,4 +1,5 @@
 import os
+import math
 import numpy as np
 import pandas as pd
 
@@ -23,6 +24,10 @@ def get_os_variables():
     config_file.close()
 
     return java_var, spark_var, hadoop_var
+
+
+def round_up_to_even(num):
+    return math.ceil(num / 2.) * 2
 
 
 # =========    Serially     ============

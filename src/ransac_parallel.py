@@ -1,7 +1,10 @@
+import numpy as np
+import pandas as pd
+
 import pyspark.sql.functions as F
 from pyspark.sql.types import StructType, StructField, DoubleType, IntegerType
 
-from src.utils import init_spark
+from src.utils import init_spark, round_up_to_even
 
 
 # =========    Parallel     ============
@@ -36,7 +39,6 @@ def extract_data(spark, file_path):
 def init_models_DF(spark):
     """
     Create Models empty template Spark DataFrame
-
     :param spark: Spark session
     :return: Empty Models Spark DF
     """
@@ -54,41 +56,51 @@ def init_models_DF(spark):
 def get_random_sample_pairs(samples, num_of_pairs):
     """
     Picks pairs of random samples from the DataFrame of samples given.
-    * It also makes sure they do not have the same x.
-
+    * It also makes sure they do not have the same x
     :param samples: The Spark DataFrame of samples
     :param num_of_pairs: Number of pairs needed (number of iterations)
-    :return: List of Pairs of samples as dictionary - {x1,y1,x2,y2}
+    :return: Pandas DataFrame of Pairs of samples - [x1,y1,x2,y2]
     """
 
     pairs_to_add = num_of_pairs
-    random_sample_pairs_lst = []
+
+    random_sample_pairs_df = pd.DataFrame(columns=('x1', 'y1', 'x2', 'y2'))
 
     while pairs_to_add != 0:
-        random_samples = samples.rdd.takeSample(True, pairs_to_add * 2)
+        samples_to_take = round_up_to_even(pairs_to_add * 2.005)
 
-        for row_idx_1 in range(pairs_to_add):
+        random_samples = samples.rdd.takeSample(True, samples_to_take)
 
-
-            row_idx_2 = row_idx_1 + pairs_to_add
+        for row_idx_1 in range(samples_to_take // 2):
+            row_idx_2 = row_idx_1 + samples_to_take // 2
 
             if random_samples[row_idx_1]['x'] - random_samples[row_idx_2]['x'] != 0:
-                random_sample_pairs_lst.append({
+                random_sample_pairs_df = random_sample_pairs_df.append({
                     "x1": random_samples[row_idx_1]['x'],
                     "y1": random_samples[row_idx_1]['y'],
                     "x2": random_samples[row_idx_2]['x'],
                     "y2": random_samples[row_idx_2]['y'],
-                })
+                }, ignore_index=True)
 
-        pairs_to_add = num_of_pairs - len(random_sample_pairs_lst)
+                if num_of_pairs - len(random_sample_pairs_df) == 0:
+                    break
 
-    return random_sample_pairs_lst
+        pairs_to_add = num_of_pairs - len(random_sample_pairs_df)
+
+    return random_sample_pairs_df
 
 
-def modelFromSamplePair(sample1, sample2):
-    dx = sample1['x'] - sample2['x']
-    if dx == 0:  # avoid division by zero later
-        dx = 0.0001
+def create_models_from_sample_pairs(sample_pairs):
+    """
+    Generate a line models (a,b) from a pairs of (x,y) samples
+    :param sample_pairs: Pandas DataFrame of Pairs of samples - [x1,y1,x2,y2]
+    :return: Pandas DataFrame of Models |   model = <a,b>
+    """
+
+    models_data = pd.DataFrame()
+
+    # avoid division by zero later
+    models_data['dx'] = [x1 - x2 if x1 - x2 != 0 else 0.0001 for x1, x2 in sample_pairs[['x1', 'x2']].values]
 
     # model = <a,b> where y = ax+b
     # so given x1,y1 and x2,y2 =>
@@ -97,9 +109,12 @@ def modelFromSamplePair(sample1, sample2):
     #  y1-y2 = a*(x1 - x2) ==>  a = (y1-y2)/(x1-x2)
     #  b = y1 - a*x1
 
-    a = (sample1['y'] - sample2['y']) / dx
-    b = sample1['y'] - sample1['x'] * a
-    return {'a': a, 'b': b}
+    models_data['a'] = (sample_pairs['y1'] - sample_pairs['y2']) / models_data['dx']
+    models_data['b'] = sample_pairs['y1'] - sample_pairs['x1'] * models_data['a']
+
+    models_data.drop('dx', axis=1, inplace=True)
+
+    return models_data
 
 
 def scoreModelAgainstSamples(model, samples, cutoff_dist=20):
@@ -130,7 +145,9 @@ def parallel_ransac(file_path, iterations, cutoff_dist):
 
     models_df = init_models_DF(spark)
 
-    random_sample_pairs = get_random_sample_pairs(samples_df, iterations)
+    random_sample_pairs = get_random_sample_pairs(samples=samples_df, num_of_pairs=iterations)
+
+    create_models_from_sample_pairs(sample_pairs=random_sample_pairs)
 
     #  TODO:  Need This? & Remove
     # samples_df.persist()
