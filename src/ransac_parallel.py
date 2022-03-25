@@ -39,12 +39,14 @@ def get_random_sample_pair(samples):
     """
     dx = 0
     selected_samples = []
-    row_list = samples.collect()
+    # row_list = samples.collect()
+    row_list = samples
     while dx == 0:
         # keep going until we get a pair with dx != 0
         selected_samples = []
         for i in [0, 1]:
-            index = random.randint(0, samples.count() - 1)
+            # index = random.randint(0, samples.count() - 1)
+            index = random.randint(0, len(samples) - 1)
 
             x = row_list[index].__getitem__('x')
             y = row_list[index].__getitem__('y')
@@ -81,26 +83,16 @@ def scoreModelAgainstSamples(model, samples, cutoff_dist=20):
         .withColumn('distance', F.abs(samples['y'] - F.col('pred_y'))) \
         .withColumn('score', F
                     .when(F.col('distance') <= F.lit(cutoff_dist), F.col('distance'))
-                    .otherwise(F.lit(cutoff_dist))).select(F.sum('score')).collect()[0][0]
+                    .otherwise(F.lit(cutoff_dist)))
 
-    calculation_df = samples.withColumn('pred_y', model['a'] * samples['x'] + model['b'])
-    calculation_df = calculation_df.withColumn('distance', F.abs(calculation_df['y'] - calculation_df['pred_y'])) \
-        .withColumn('score',
-                    F.when(F.col('distance') <= F.lit(cutoff_dist), F.col('distance')).otherwise(
-                        F.lit(cutoff_dist)))
+    # .otherwise(F.lit(cutoff_dist))).select(F.sum('score')).collect()[0][0]
 
-    calculation_df.printSchema()
-    calculation_df.show(truncate=False)
+    totalScore = totalScore.select('score').toPandas()['score'].sum()
 
-    x = 1
+    #  TODO: Remove
+    # samples.printSchema()
+    # samples.show(truncate=False)
 
-    for sample_i in range(0, len(samples) - 1):
-        sample = samples[sample_i]
-        pred_y = model['a'] * sample['x'] + model['b']
-        score = min(abs(sample['y'] - pred_y), cutoff_dist)
-        totalScore += score
-
-    # print("model ",model, " score ", totalScore)
     return totalScore
 
 
@@ -116,21 +108,29 @@ def parallel_ransac(file_path, iterations, cutoff_dist):
     spark, sc = init_spark()
 
     samples = extract_data(spark, file_path)
-    samples.printSchema()
-    samples.show(truncate=False)
+    samples = samples.repartition(100)
+    samples.persist()
+
+    #  TODO: Remove
+    # samples.printSchema()
+    # samples.show(truncate=False)
 
     min_m = {}
     min_score = -1
+    row_list = samples.collect()
     for i in range(1, iterations):
         if i % 10 == 0:
             print(i)
-        sample1, sample2 = get_random_sample_pair(samples)
+        # sample1, sample2 = get_random_sample_pair(samples)
+        sample1, sample2 = get_random_sample_pair(row_list)
         m = modelFromSamplePair(sample1, sample2)
         score = scoreModelAgainstSamples(m, samples, cutoff_dist)
 
         if min_score < 0 or score < min_score:
             min_score = score
             min_m = m
+
+    print({'model': min_m, 'score': min_score})
 
     return {'model': min_m, 'score': min_score}
 
