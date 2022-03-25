@@ -1,8 +1,8 @@
 import random
 
-from pyspark.sql.types import DoubleType
 import pyspark.sql.functions as F
-# from F import when, lit
+from pyspark.sql.types import StructType, StructField, DoubleType, IntegerType
+
 from src.utils import init_spark
 
 
@@ -12,31 +12,63 @@ from src.utils import init_spark
 def extract_data(spark, file_path):
     """
     Read samples from a csv file into Spark DataFrame.
-    Clean unnecessary columns & Cast to DoubleType .
+    Clean unnecessary columns.
     Each sample contain 'x' and 'y'.
 
     :param spark: Spark session
-    :param file_path: Path to the csv file
-    :return: The Spark DataFrame
+    :param file_path: Path to the csv file - the Dataset
+    :return: The Samples - type: Spark DataFrame
     """
 
-    df = spark.read.options(header=True).csv(file_path)
+    samplesSchema = StructType([
+        StructField('_c0', IntegerType()),
+        StructField('x', DoubleType()),
+        StructField('y', DoubleType()),
+    ])
 
-    df = df.withColumn("x", df["x"].cast(DoubleType())) \
-        .withColumn("y", df["y"].cast(DoubleType())) \
+    df = spark.read.format("csv") \
+        .option("header", True) \
+        .schema(samplesSchema) \
+        .load(file_path) \
         .drop("_c0")
 
     return df
 
 
-def get_random_sample_pair(samples):
+def init_models_DF(spark):
+    """
+    Create Models empty template Spark DataFrame
+
+    :param spark: Spark session
+    :return: Empty Models Spark DF
+    """
+    modelsSchema = StructType([
+        StructField('x1', DoubleType()), StructField('y1', DoubleType()),
+        StructField('x2', DoubleType()), StructField('y2', DoubleType()),
+        StructField('a', DoubleType()), StructField('b', DoubleType())
+    ])
+
+    df = spark.createDataFrame([], schema=modelsSchema)
+
+    return df
+
+
+def get_random_sample_pair(models_df, samples, num_of_pairs):
     """
     Picks a pair of random samples from the DataFrame of samples given.
     * It also makes sure they do not have the same x.
 
+    :param models_df: The Spark DataFrame of models
     :param samples: The Spark DataFrame of samples
+    :param num_of_pairs: Number of pairs needed (number of iterations)
     :return: A Pair of samples as dictionary - {x,y}
     """
+
+    # random_samples_1 = samples.rdd.takeSample(False, num_of_pairs).toDF(["x1", "y1"])
+    # random_samples_2 = samples.rdd.takeSample(False, num_of_pairs).toDF(["x2", "y2"])
+    random_samples_1 = samples.rdd.takeSample(False, num_of_pairs)
+    random_samples_2 = samples.rdd.takeSample(False, num_of_pairs)
+
     dx = 0
     selected_samples = []
     # row_list = samples.collect()
@@ -96,41 +128,36 @@ def scoreModelAgainstSamples(model, samples, cutoff_dist=20):
     return totalScore
 
 
-# the function that runs the ransac algorithm (parallel)
-# gets as input the number of iterations to use and the cutoff_distance for the fit score
 def parallel_ransac(file_path, iterations, cutoff_dist):
-    # runs ransac algorithm for the given amount of iterations, where in each iteration it:
-    # 1. randomly creates a model from the samples by calling m = modelFromSamplesFunc(samples)
-    # 2. calculating the score of the model against the sample set
-    # 3. keeps the model with the best score
-    # after all iterations are done - returns the best model and score
-
     spark, sc = init_spark()
 
-    samples = extract_data(spark, file_path)
-    samples = samples.repartition(100)
-    samples.persist()
+    samples_df = extract_data(spark, file_path)
 
-    #  TODO: Remove
-    # samples.printSchema()
-    # samples.show(truncate=False)
+    models_df = init_models_DF(spark)
+
+    get_random_sample_pair(models_df, samples_df, iterations)
+
+    #  TODO:  Need This? & Remove
+    # samples_df.persist()
+    # samples_df.printSchema()
+    # samples_df.show(truncate=False)
 
     min_m = {}
     min_score = -1
-    row_list = samples.collect()
-    for i in range(1, iterations):
-        if i % 10 == 0:
-            print(i)
-        # sample1, sample2 = get_random_sample_pair(samples)
-        sample1, sample2 = get_random_sample_pair(row_list)
-        m = modelFromSamplePair(sample1, sample2)
-        score = scoreModelAgainstSamples(m, samples, cutoff_dist)
-
-        if min_score < 0 or score < min_score:
-            min_score = score
-            min_m = m
-
-    print({'model': min_m, 'score': min_score})
+    # row_list = samples_df.collect()
+    # for i in range(1, iterations):
+    #     if i % 10 == 0:
+    #         print(i)
+    #     # sample1, sample2 = get_random_sample_pair(samples_df)
+    #     # sample1, sample2 = get_random_sample_pair(row_list)
+    #     m = modelFromSamplePair(sample1, sample2)
+    #     score = scoreModelAgainstSamples(m, samples_df, cutoff_dist)
+    #
+    #     if min_score < 0 or score < min_score:
+    #         min_score = score
+    #         min_m = m
+    #
+    # print({'model': min_m, 'score': min_score})
 
     return {'model': min_m, 'score': min_score}
 
@@ -226,9 +253,11 @@ def some_basic_pyspark_example():
     # now we create a spark context in local mode (i.e - not on cluster)
     sc = SparkContext("local[{}]".format(num_cores_to_use), "My First App")
 
+
     # function we will use in parallel
     def square_num(x):
         return x * x
+
 
     rdd_of_num = sc.parallelize([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16])
 

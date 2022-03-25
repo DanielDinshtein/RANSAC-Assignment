@@ -4,7 +4,6 @@ import pandas as pd
 
 import json
 
-from pyspark import SparkConf
 from pyspark.sql import SparkSession
 
 
@@ -104,15 +103,10 @@ def init_spark():
 
     num_cores_to_use = "4"  # depends on how many cores you have locally. try 2X or 4X the amount of HW threads
 
-    conf = SparkConf().setAll(
-        [("spark.executor.cores", num_cores_to_use), ("spark.sql.execution.arrow.pyspark.enabled", "true")])
-
     spark = SparkSession.builder \
         .appName("Parallel RANSAC") \
-        .config(conf=conf) \
+        .config("spark.executor.cores", num_cores_to_use) \
         .getOrCreate()
-
-    # .config("spark.executor.cores", num_cores_to_use) \
 
     sc = spark.sparkContext
     sc.setLogLevel("OFF")
