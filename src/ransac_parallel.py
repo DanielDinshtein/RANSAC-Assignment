@@ -1,4 +1,5 @@
 import random
+import pandas as pd
 
 import pyspark.sql.functions as F
 from pyspark.sql.types import StructType, StructField, DoubleType, IntegerType
@@ -53,41 +54,38 @@ def init_models_DF(spark):
     return df
 
 
-def get_random_sample_pair(models_df, samples, num_of_pairs):
+def get_random_sample_pairs(samples, num_of_pairs):
     """
-    Picks a pair of random samples from the DataFrame of samples given.
+    Picks pairs of random samples from the DataFrame of samples given.
     * It also makes sure they do not have the same x.
 
-    :param models_df: The Spark DataFrame of models
     :param samples: The Spark DataFrame of samples
     :param num_of_pairs: Number of pairs needed (number of iterations)
-    :return: A Pair of samples as dictionary - {x,y}
+    :return: List of Pairs of samples as dictionary - {x1,y1,x2,y2}
     """
 
-    # random_samples_1 = samples.rdd.takeSample(False, num_of_pairs).toDF(["x1", "y1"])
-    # random_samples_2 = samples.rdd.takeSample(False, num_of_pairs).toDF(["x2", "y2"])
-    random_samples_1 = samples.rdd.takeSample(False, num_of_pairs)
-    random_samples_2 = samples.rdd.takeSample(False, num_of_pairs)
+    pairs_to_add = num_of_pairs
+    random_sample_pairs_lst = []
 
-    dx = 0
-    selected_samples = []
-    # row_list = samples.collect()
-    row_list = samples
-    while dx == 0:
-        # keep going until we get a pair with dx != 0
-        selected_samples = []
-        for i in [0, 1]:
-            # index = random.randint(0, samples.count() - 1)
-            index = random.randint(0, len(samples) - 1)
+    while pairs_to_add != 0:
+        random_samples_1 = samples.rdd.takeSample(True, pairs_to_add)
+        random_samples_2 = samples.rdd.takeSample(True, pairs_to_add)
 
-            x = row_list[index].__getitem__('x')
-            y = row_list[index].__getitem__('y')
+        for row_idx in range(pairs_to_add):
 
-            selected_samples.append({'x': x, 'y': y})
-            # print("creator_samples ",i, " : ", creator_samples, " index ", index)
-        dx = selected_samples[0]['x'] - selected_samples[1]['x']
+            print("1")
 
-    return selected_samples[0], selected_samples[1]
+            if random_samples_1[row_idx]['x'] - random_samples_2[row_idx]['x'] != 0:
+                random_sample_pairs_lst.append({
+                    "x1": random_samples_1[row_idx]['x'],
+                    "y1": random_samples_1[row_idx]['y'],
+                    "x2": random_samples_2[row_idx]['x'],
+                    "y2": random_samples_2[row_idx]['y'],
+                })
+
+        pairs_to_add = num_of_pairs - len(random_sample_pairs_lst)
+
+    return random_sample_pairs_lst
 
 
 def modelFromSamplePair(sample1, sample2):
@@ -135,7 +133,7 @@ def parallel_ransac(file_path, iterations, cutoff_dist):
 
     models_df = init_models_DF(spark)
 
-    get_random_sample_pair(models_df, samples_df, iterations)
+    random_sample_pairs = get_random_sample_pairs(samples_df, iterations)
 
     #  TODO:  Need This? & Remove
     # samples_df.persist()
