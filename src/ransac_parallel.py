@@ -1,6 +1,3 @@
-import random
-import pandas as pd
-
 import pyspark.sql.functions as F
 from pyspark.sql.types import StructType, StructField, DoubleType, IntegerType
 
@@ -68,19 +65,19 @@ def get_random_sample_pairs(samples, num_of_pairs):
     random_sample_pairs_lst = []
 
     while pairs_to_add != 0:
-        random_samples_1 = samples.rdd.takeSample(True, pairs_to_add)
-        random_samples_2 = samples.rdd.takeSample(True, pairs_to_add)
+        random_samples = samples.rdd.takeSample(True, pairs_to_add * 2)
 
-        for row_idx in range(pairs_to_add):
+        for row_idx_1 in range(pairs_to_add):
 
-            print("1")
 
-            if random_samples_1[row_idx]['x'] - random_samples_2[row_idx]['x'] != 0:
+            row_idx_2 = row_idx_1 + pairs_to_add
+
+            if random_samples[row_idx_1]['x'] - random_samples[row_idx_2]['x'] != 0:
                 random_sample_pairs_lst.append({
-                    "x1": random_samples_1[row_idx]['x'],
-                    "y1": random_samples_1[row_idx]['y'],
-                    "x2": random_samples_2[row_idx]['x'],
-                    "y2": random_samples_2[row_idx]['y'],
+                    "x1": random_samples[row_idx_1]['x'],
+                    "y1": random_samples[row_idx_1]['y'],
+                    "x2": random_samples[row_idx_2]['x'],
+                    "y2": random_samples[row_idx_2]['y'],
                 })
 
         pairs_to_add = num_of_pairs - len(random_sample_pairs_lst)
