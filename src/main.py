@@ -3,6 +3,7 @@ import time as time
 from ransac_parallel import parallel_ransac
 
 from ransac_excercise import ransac, read_samples
+from utils import plot_model_and_samples
 
 
 # ========= run ransac ==============
@@ -21,6 +22,7 @@ def run_original():
 
     print("Serial Algorithm model Stats: - \n")
     print(best_model)
+    print("********************************")
 
     # now plot the model
     # plot_model_and_samples(best_model, samples)
@@ -37,16 +39,17 @@ def run_ransac():
 
     print("Parallel Algorithm model Stats: - \n")
     print(best_model)
+    print("********************************")
 
-    # samples = read_samples(path_to_samples_csv)
-    # best_model = parallel_ransac(samples, iterations=5000, cutoff_dist=20)
-    #
-    # # now plot the model
-    # plot_model_and_samples(best_model, samples)
+    # now plot the model
+    samples = read_samples(path_to_samples_csv)
+    plot_model_and_samples(best_model, samples)
 
 
 # ============ main =================
 
 if __name__ == '__main__':
-    # run_original()
+    run_original()
     run_ransac()
+
+    print("a = 48.9684912365 \nb = 44.234")

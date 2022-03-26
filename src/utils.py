@@ -63,12 +63,12 @@ def generate_samples(n_samples=1000, n_outliers=50, b=1, output_path=None):
         X[:n_outliers] = 2 * np.random.normal(size=(n_outliers, 1))
         y[:n_outliers] = 10 * np.random.normal(size=n_outliers)
 
-    d = {'x': X.flatten(), 'y': y.flatten()}
+    d = { 'x': X.flatten(), 'y': y.flatten() }
     df = pd.DataFrame(data=d)
     samples = []
     for i in range(0, len(X) - 1):
-        samples.append({'x': X[i][0], 'y': y[i]})
-    ref_model = {'a': coef.item(0), 'b': b}
+        samples.append({ 'x': X[i][0], 'y': y[i] })
+    ref_model = { 'a': coef.item(0), 'b': b }
 
     if output_path is not None:
         import os
@@ -90,6 +90,29 @@ def plot_model_and_samples(model, samples):
     plt.plot(xs, ys, '.', [x_min, x_max], [y_min, y_max], '-r')
     plt.grid()
     plt.show()
+
+
+def calc_without_spark(models, samples, cutoff_dist=20):
+    min_m = { }
+    min_score = -1
+    calc_DF = pd.DataFrame(columns=('pred_y', 'distance', 'score'))
+
+    for idx, model in models.iterrows():
+        calc_DF['pred_y'] = model['a'] * samples['x'] + model['b']
+        calc_DF['distance'] = samples['y'] - calc_DF['pred_y']
+
+        calc_DF['score'] = [dis if dis <= cutoff_dist else cutoff_dist for dis in
+                            calc_DF['distance'].abs().values]
+
+        score, m = calc_DF['score'].sum(), { 'a': model['a'], 'b': model['b'] }
+
+        if min_score < 0 or score < min_score:
+            min_score = score
+            min_m = m
+
+        calc_DF.drop(calc_DF.index, inplace=True)
+
+    return { 'model': min_m, 'score': min_score }
 
 
 # =========    Parallel     ============

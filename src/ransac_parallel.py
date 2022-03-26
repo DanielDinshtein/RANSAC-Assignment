@@ -3,8 +3,9 @@ import pandas as pd
 
 import pyspark.sql.functions as F
 from pyspark.sql.types import StructType, StructField, DoubleType, IntegerType
+from pyspark.sql import Row
 
-from src.utils import init_spark, round_up_to_even, read_samples
+from src.utils import init_spark, round_up_to_even, read_samples, calc_without_spark
 
 
 # =========    Parallel     ============
@@ -66,8 +67,6 @@ def get_random_sample_pairs(samples, num_of_pairs):
 
     while pairs_to_add > 0:
         samples_to_take = round_up_to_even(pairs_to_add * 1.005)
-        #  TODO: Improve - remove
-        print("1")
 
         random_samples_1 = pd.DataFrame(samples.sample(n=samples_to_take, replace=True).values, columns=('x1', 'y1'))
         random_samples_2 = pd.DataFrame(samples.sample(n=samples_to_take, replace=True).values, columns=('x2', 'y2'))
@@ -116,20 +115,41 @@ def create_models_from_sample_pairs(sample_pairs):
 def calc_models_scores_against_samples(spark, samples, models, cutoff_dist=20):
     models_df = spark.createDataFrame(models)
 
+    y = models_df.cache().collect()
+
 
     def calculate_score(model):
         calc_DF = pd.DataFrame()
+
+        model = model.asDict()
 
         calc_DF['pred_y'] = model['a'] * samples['x'] + model['b']
         calc_DF['distance'] = samples['y'] - calc_DF['pred_y']
         calc_DF['score'] = [dis if dis <= cutoff_dist else cutoff_dist for dis in
                             calc_DF['distance'].abs().values]
-        return calc_DF['score'].sum(), { 'a': model['a'], 'b': model['b'] }
+        # return calc_DF['score'].sum(), { 'a': model['a'], 'b': model['b'] }
+        return Row(**{ 'score': calc_DF['score'].sum(), 'model': { 'a': model['a'], 'b': model['b'] } })
 
 
-    totalScore = models_df.rdd.map(calculate_score)
+    totalScore = models_df.rdd.map(lambda row: calculate_score(row))
+    # totalScore = models_df.rdd.map(calculate_score)
+
+    totalScore_cached = totalScore.cache().collect()
+
+    df = pd.DataFrame(
+        [{ 'score': row['score'], 'a': row['model']['a'], 'b': row['model']['b'] } for row in totalScore_cached])
+
+    res = spark.createDataFrame(df)
+    # res = totalScore.toDF().show()
+
+    res.count()
+
+    y = 2
 
     result = totalScore.reduce(lambda model_a, model_b: model_a if model_a[0] <= model_b[0] else model_b)
+
+    models_df.count()
+    x = 1
 
     return { 'model': result[1], 'score': result[0] }
 
@@ -156,8 +176,6 @@ def scoreModelAgainstSamples(model, samples, cutoff_dist=20):
 
 
 def parallel_ransac(file_path, iterations, cutoff_dist):
-    spark, sc = init_spark()
-
     # samples_df = extract_data(spark, file_path)
 
     samples_df = pd.DataFrame(read_samples(file_path))
@@ -166,7 +184,14 @@ def parallel_ransac(file_path, iterations, cutoff_dist):
 
     models = create_models_from_sample_pairs(sample_pairs=random_sample_pairs)
 
-    result = calc_models_scores_against_samples(spark=spark, samples=samples_df, models=models, cutoff_dist=cutoff_dist)
+    with_spark = False
+
+    if with_spark:
+        spark, sc = init_spark()
+        result = calc_models_scores_against_samples(spark=spark, samples=samples_df, models=models,
+                                                    cutoff_dist=cutoff_dist)
+    else:
+        result = calc_without_spark(models=models, samples=samples_df, cutoff_dist=cutoff_dist)
 
     #  TODO:  Need This? & Remove
     # samples_df.persist()
