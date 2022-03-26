@@ -1,9 +1,8 @@
 import os
 import math
+import json
 import numpy as np
 import pandas as pd
-
-import json
 
 from pyspark.sql import SparkSession
 
@@ -24,6 +23,47 @@ def get_os_variables():
     config_file.close()
 
     return java_var, spark_var, hadoop_var
+
+
+def get_case_data(case_num):
+    """
+    Returns the parameters for the main function based on the case number
+    :param case_num: The case number params needed
+    :return: samples file path  ; a,b of the original model
+    """
+    cases = {
+        "1": {
+            "file_path": 'input files\\samples_for_line_a_48.9684912365_b_44.234.csv',
+            "a": 48.9684912365,
+            "b": 44.234
+        },
+        "2": {
+            "file_path": 'input files\\samples_for_line_a_27.0976088174_b_12.234 (2).csv',
+            "a": 27.0976088174,
+            "b": 12.234
+        },
+    }
+
+    case_data = cases[str(case_num)]
+
+    return case_data['file_path'], case_data['a'], case_data['b']
+
+
+def calculate_model_distance(original_model, best_model):
+    """
+    Calculate the Euclidean distance between 2 points -
+    models parameter - a,b
+    :param original_model: The original line model params
+    :param best_model: The RANSAC algorithm best model params
+    :return The Distance
+    """
+
+    p1 = [original_model['a'], original_model['b']]
+    p2 = [best_model['a'], best_model['b']]
+
+    eDistance = math.sqrt(((p1[0] - p2[0]) ** 2) + ((p1[1] - p2[1]) ** 2))
+
+    return eDistance
 
 
 def round_up_to_even(num):
@@ -129,12 +169,16 @@ def init_os_environ():
 def init_spark():
     init_os_environ()
 
-    num_cores_to_use = "4"  # depends on how many cores you have locally. try 2X or 4X the amount of HW threads
-
     spark = SparkSession.builder \
         .appName("Parallel RANSAC") \
-        .config("spark.executor.cores", num_cores_to_use) \
         .getOrCreate()
+
+    # num_cores_to_use = "4"  # depends on how many cores you have locally. try 2X or 4X the amount of HW threads
+    #
+    # spark = SparkSession.builder \
+    #     .appName("Parallel RANSAC") \
+    #     .config("spark.executor.cores", num_cores_to_use) \
+    #     .getOrCreate()
 
     sc = spark.sparkContext
     sc.setLogLevel("OFF")

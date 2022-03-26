@@ -1,55 +1,88 @@
 import time as time
 
+from ransac_excercise import ransac
 from ransac_parallel import parallel_ransac
 
-from ransac_excercise import ransac, read_samples
-from utils import plot_model_and_samples
+from utils import read_samples, get_case_data, calculate_model_distance
 
 
 # ========= run ransac ==============
 
 
-def run_original():
+def run_original(path_to_samples_csv, a, b):
+    """--------  Run RANSAC  --------"""
+
     start = time.time()
 
-    path_to_samples_csv = 'input files/samples_for_line_a_48.9684912365_b_44.234.csv'
     samples = read_samples(path_to_samples_csv)
 
     best_model = ransac(samples, iterations=5000, cutoff_dist=20)
 
     end = time.time()
-    print("\n* Run Time {:.3f}\n".format(end - start))
 
-    print("Serial Algorithm model Stats: - \n")
+    """--------  Stats  --------"""
+
+    eDistance = calculate_model_distance(original_model={ 'a': a, 'b': b }, best_model=best_model['model'])
+
+    print("\n Run Time {:.3f}\n".format(end - start))
+
+    print("Serial Algorithm model Stats :")
+    print("best model -")
     print(best_model)
+    print("The Euclidean distance:  {}".format(eDistance))
     print("********************************")
 
     # now plot the model
     # plot_model_and_samples(best_model, samples)
 
+    return eDistance
 
-def run_ransac():
+
+def run_ransac(path_to_samples_csv, a, b):
+    """--------  Run RANSAC  --------"""
+
     start = time.time()
 
-    path_to_samples_csv = "C:/Users/Daniel/Desktop/משרות/משימות מראיונות/Mobileye/RANSAC-Assignment/input files/samples_for_line_a_48.9684912365_b_44.234.csv"
     best_model = parallel_ransac(path_to_samples_csv, iterations=5000, cutoff_dist=20)
 
     end = time.time()
-    print("\n* Run Time {:.3f}\n".format(end - start))
+
+    """--------  Stats  --------"""
+
+    eDistance = calculate_model_distance(original_model={ 'a': a, 'b': b }, best_model=best_model['model'])
+
+    print("\n Run Time {:.3f}\n".format(end - start))
 
     print("Parallel Algorithm model Stats: - \n")
+    print("best model -")
     print(best_model)
+    print("The Euclidean distance:  {}".format(eDistance))
     print("********************************")
 
     # now plot the model
-    samples = read_samples(path_to_samples_csv)
-    plot_model_and_samples(best_model, samples)
+    # samples = read_samples(path_to_samples_csv)
+    # plot_model_and_samples(best_model, samples)
+
+    return eDistance
 
 
 # ============ main =================
 
 if __name__ == '__main__':
-    run_original()
-    run_ransac()
 
-    print("a = 48.9684912365 \nb = 44.234")
+    CASE_NUM = 1
+
+    path_to_samples_csv, a, b = get_case_data(case_num=CASE_NUM)
+
+    eDistance_original = run_original(path_to_samples_csv=path_to_samples_csv, a=a, b=b)
+    eDistance_parallel = run_ransac(path_to_samples_csv=path_to_samples_csv, a=a, b=b)
+
+    #  Check who generated better model
+
+    if eDistance_parallel <= eDistance_original:
+        print("Parallel RANSAC version generated better model")
+    else:
+        print("Serial   RANSAC version generated better model")
+
+    while True:
+        x = 1
