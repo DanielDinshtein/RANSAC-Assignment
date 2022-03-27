@@ -4,7 +4,7 @@ import pandas as pd
 from pyspark.sql import Row
 from pyspark.sql.types import StructType, StructField, DoubleType, IntegerType
 
-from src.score_calculation import modelsDF_map_reduce, samplesDF_map_reduce, samplesDF_modelsDF
+from src.score_calculation import modelsDF_map_reduce, samplesDF_map_reduce, samplesDF_modelsDF, samplesDF_modelsRDD_map
 from src.utils import init_spark, round_up_to_even, read_samples, calc_without_spark
 
 
@@ -113,7 +113,7 @@ def create_models_from_sample_pairs(sample_pairs):
 
 
 def calc_models_scores_against_samples(spark, samples, models, cutoff_dist=20):
-    CASE_NUM = 3
+    CASE_NUM = 4
 
     if CASE_NUM == 1:
         return modelsDF_map_reduce(spark=spark, samples=samples, models=models, cutoff_dist=cutoff_dist)
@@ -123,6 +123,9 @@ def calc_models_scores_against_samples(spark, samples, models, cutoff_dist=20):
 
     if CASE_NUM == 3:
         return samplesDF_modelsDF(spark=spark, samples=samples, models=models, cutoff_dist=cutoff_dist)
+
+    if CASE_NUM == 4:
+        return samplesDF_modelsRDD_map(spark=spark, samples=samples, models=models, cutoff_dist=cutoff_dist)
 
 
 def parallel_ransac(file_path, iterations, cutoff_dist):

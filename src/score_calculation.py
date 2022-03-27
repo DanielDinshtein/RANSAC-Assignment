@@ -1,6 +1,7 @@
 import pandas as pd
 
 import pyspark.sql.functions as F
+from src.utils import init_spark
 
 
 def modelsDF_map_reduce(spark, samples, models, cutoff_dist=20):
@@ -92,41 +93,58 @@ def samplesDF_modelsDF(spark, samples, models, cutoff_dist=20):
 
     models_summary_ordered = models_summary.orderBy('totalScore')
 
-    models_summary_ordered.persist().head(1)
+    result = models_summary_ordered.head(1)[0]
 
-    row1 = models_summary_ordered.collect()[0]
-    # row1 = models_summary.agg({ 'totalScore': 'min' }).collect()[0]
+    models_df.unpersist()
+
+    return { 'model': { 'a': result[1], 'b': result[2] }, 'score': result[3] }
+
+
+def samplesDF_modelsRDD_map(spark, samples, models, cutoff_dist=20):
+    spark, sc = init_spark()
+
+    samples_df = spark.createDataFrame(samples)
+    # samples_df.persist()
+
+    # models['idx'] = [str(i) for i in range(1, 1 + len(models))]
+    # models_df = spark.createDataFrame(models[['idx', 'a', 'b']])
+    # models_df = sc.parallelize(models[['idx', 'a', 'b']])
+
+    models_rdd = sc.parallelize(
+        [{ 'idx': idx + 1, 'a': model['a'], 'b': model['b'] } for idx, model in models.iterrows()])
+
+
+    # models_rdd.persist()
+
+
+    def calc_score_by_model(model):
+        samples_score = samples_df.select(
+            F.when(F.abs(samples_df.y - (F.lit(model['a']) * samples_df.x + F.lit(model['b']))) > F.lit(cutoff_dist),
+                   F.lit(cutoff_dist)).otherwise(
+                F.abs(samples_df.y - (F.lit(model['a']) * samples_df.x + F.lit(model['b'])))).alias('score'))
+
+        totalScore = samples_score.select(F.sum(samples_score.score))
+
+        return model['idx'], model['a'], model['b'], totalScore
+
+
+    merged_rdd = models_rdd.map(lambda model: calc_score_by_model(model=model))
+
+    models_summary = merged_rdd.toDF(['idx', 'a', 'b', 'totalScore'])
 
     models_summary.printSchema()
     models_summary.show(truncate=False)
 
-    samples_df.printSchema()
-    samples_df.show(truncate=False)
+    models_summary_ordered = models_summary.orderBy('totalScore')
 
-    x = 1
+    result = models_summary_ordered.head(1)[0]
 
-    models_df = models_df.select(
-        F.when(F.abs(samples['y'] - (F.col('a') * samples['x'] + F.col('b'))) > F.lit(cutoff_dist), F.lit(cutoff_dist))) \
-        .otherwise()
+    models_rdd.unpersist()
 
-
-    def calculate_score(model):
-        calc_DF = pd.DataFrame()
-
-        calc_DF['pred_y'] = model['a'] * samples['x'] + model['b']
-        calc_DF['distance'] = samples['y'] - calc_DF['pred_y']
-        calc_DF['score'] = [dis if dis <= cutoff_dist else cutoff_dist for dis in
-                            calc_DF['distance'].abs().values]
-        return calc_DF['score'].sum(), { 'a': model['a'], 'b': model['b'] }
+    return { 'model': { 'a': result[1], 'b': result[2] }, 'score': result[3] }
 
 
-    totalScore = models_df.rdd.map(calculate_score)
-
-    result = totalScore.reduce(lambda model_a, model_b: model_a if model_a[0] <= model_b[0] else model_b)
-
-    models_df.unpersist()
-
-    return { 'model': result[1], 'score': result[0] }
+#  First Versions
 
 
 def calc_models_scores_against_samples(spark, samples, models, cutoff_dist=20):

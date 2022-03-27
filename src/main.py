@@ -79,6 +79,7 @@ if __name__ == '__main__':
     eDistance_original = 0
     # eDistance_original = run_original(path_to_samples_csv=path_to_samples_csv, a=a, b=b)
     eDistance_parallel = run_ransac(path_to_samples_csv=path_to_samples_csv, a=a, b=b)
+    # eDistance_parallel = 0
 
     #  Check who generated better model
 
