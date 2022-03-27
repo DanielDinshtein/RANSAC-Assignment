@@ -3,7 +3,7 @@ import time as time
 from ransac_excercise import ransac
 from ransac_parallel import parallel_ransac
 
-from utils import read_samples, get_case_data, calculate_model_distance
+from utils import init_spark, read_samples, get_case_data, calculate_model_distance, init_os_environ
 
 
 # ========= run ransac ==============
@@ -69,12 +69,15 @@ def run_ransac(path_to_samples_csv, a, b):
 # ============ main =================
 
 if __name__ == '__main__':
+    init_os_environ()
+    init_spark()
 
-    CASE_NUM = 1
+    CASE_NUM = 2
 
     path_to_samples_csv, a, b = get_case_data(case_num=CASE_NUM)
 
-    eDistance_original = run_original(path_to_samples_csv=path_to_samples_csv, a=a, b=b)
+    eDistance_original = 0
+    # eDistance_original = run_original(path_to_samples_csv=path_to_samples_csv, a=a, b=b)
     eDistance_parallel = run_ransac(path_to_samples_csv=path_to_samples_csv, a=a, b=b)
 
     #  Check who generated better model

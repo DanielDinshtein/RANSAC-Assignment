@@ -1,10 +1,10 @@
 import numpy as np
 import pandas as pd
 
-import pyspark.sql.functions as F
-from pyspark.sql.types import StructType, StructField, DoubleType, IntegerType
 from pyspark.sql import Row
+from pyspark.sql.types import StructType, StructField, DoubleType, IntegerType
 
+from src.score_calculation import modelsDF_map_reduce, samplesDF_map_reduce, samplesDF_modelsDF
 from src.utils import init_spark, round_up_to_even, read_samples, calc_without_spark
 
 
@@ -113,97 +113,16 @@ def create_models_from_sample_pairs(sample_pairs):
 
 
 def calc_models_scores_against_samples(spark, samples, models, cutoff_dist=20):
-    CASE_NUM = 1
+    CASE_NUM = 3
 
     if CASE_NUM == 1:
-        return ver1_modelsDF_map_reduce(spark=spark, samples=samples, models=models, cutoff_dist=cutoff_dist)
+        return modelsDF_map_reduce(spark=spark, samples=samples, models=models, cutoff_dist=cutoff_dist)
 
-    models_df = spark.createDataFrame(models)
+    if CASE_NUM == 2:
+        return samplesDF_map_reduce(spark=spark, samples=samples, models=models, cutoff_dist=cutoff_dist)
 
-    models_df.persist()
-
-
-    # y = models_df.cache().collect()
-
-
-    def calculate_score(model):
-        calc_DF = pd.DataFrame()
-
-        # model = model.asDict()
-
-        calc_DF['pred_y'] = model['a'] * samples['x'] + model['b']
-        calc_DF['distance'] = samples['y'] - calc_DF['pred_y']
-        calc_DF['score'] = [dis if dis <= cutoff_dist else cutoff_dist for dis in
-                            calc_DF['distance'].abs().values]
-        return calc_DF['score'].sum(), { 'a': model['a'], 'b': model['b'] }
-        # return Row(**{ 'score': calc_DF['score'].sum(), 'model': { 'a': model['a'], 'b': model['b'] } })
-
-
-    # totalScore = models_df.rdd.map(lambda row: calculate_score(row))
-    totalScore = models_df.rdd.map(calculate_score)
-
-    # totalScore_cached = totalScore.cache().collect()
-    #
-    # df = pd.DataFrame(
-    #     [{ 'score': row['score'], 'a': row['model']['a'], 'b': row['model']['b'] } for row in totalScore_cached])
-
-    # res = spark.createDataFrame(df)
-    # res = totalScore.toDF().show()
-
-    # res.count()
-
-    # y = 2
-
-    result = totalScore.reduce(lambda model_a, model_b: model_a if model_a[0] <= model_b[0] else model_b)
-
-    models_df.unpersist()
-    return { 'model': result[1], 'score': result[0] }
-
-
-def ver1_modelsDF_map_reduce(spark, samples, models, cutoff_dist=20):
-    models_df = spark.createDataFrame(models)
-
-    models_df.persist()
-
-
-    def calculate_score(model):
-        calc_DF = pd.DataFrame()
-
-        calc_DF['pred_y'] = model['a'] * samples['x'] + model['b']
-        calc_DF['distance'] = samples['y'] - calc_DF['pred_y']
-        calc_DF['score'] = [dis if dis <= cutoff_dist else cutoff_dist for dis in
-                            calc_DF['distance'].abs().values]
-        return calc_DF['score'].sum(), { 'a': model['a'], 'b': model['b'] }
-
-
-    totalScore = models_df.rdd.map(calculate_score)
-
-    result = totalScore.reduce(lambda model_a, model_b: model_a if model_a[0] <= model_b[0] else model_b)
-
-    models_df.unpersist()
-
-    return { 'model': result[1], 'score': result[0] }
-
-
-def scoreModelAgainstSamples(model, samples, cutoff_dist=20):
-    # predict the y using the model and x samples, per sample, and sum the abs of the distances between the real y
-    # with truncation of the error at distance cutoff_dist
-
-    totalScore = samples.withColumn('pred_y', model['a'] * samples['x'] + model['b']) \
-        .withColumn('distance', F.abs(samples['y'] - F.col('pred_y'))) \
-        .withColumn('score', F
-                    .when(F.col('distance') <= F.lit(cutoff_dist), F.col('distance'))
-                    .otherwise(F.lit(cutoff_dist)))
-
-    # .otherwise(F.lit(cutoff_dist))).select(F.sum('score')).collect()[0][0]
-
-    totalScore = totalScore.select('score').toPandas()['score'].sum()
-
-    #  TODO: Remove
-    # samples.printSchema()
-    # samples.show(truncate=False)
-
-    return totalScore
+    if CASE_NUM == 3:
+        return samplesDF_modelsDF(spark=spark, samples=samples, models=models, cutoff_dist=cutoff_dist)
 
 
 def parallel_ransac(file_path, iterations, cutoff_dist):
@@ -222,7 +141,6 @@ def parallel_ransac(file_path, iterations, cutoff_dist):
         result = calc_models_scores_against_samples(spark=spark, samples=samples_df, models=models,
                                                     cutoff_dist=cutoff_dist)
 
-        # sc.stop()
     else:
         result = calc_without_spark(models=models, samples=samples_df, cutoff_dist=cutoff_dist)
 
