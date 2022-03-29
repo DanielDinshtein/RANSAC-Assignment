@@ -1,55 +1,10 @@
-import numpy as np
 import pandas as pd
 
-from pyspark.sql import Row
-from pyspark.sql.types import StructType, StructField, DoubleType, IntegerType
-
-from src.score_calculation import modelsDF_map_reduce, samplesDF_map_reduce, samplesDF_modelsDF, samplesDF_modelsRDD_map
-from src.utils import init_spark, round_up_to_even, read_samples, calc_without_spark
+from src.utils import read_samples, calc_without_spark
+from src.score_calculation import modelsDF_map_reduce, model_samples_rdd_df
 
 
 # =========    Parallel     ============
-
-
-def extract_data(spark, file_path):
-    """
-    Read samples from a csv file into Spark DataFrame.
-    Clean unnecessary columns.
-    Each sample contain 'x' and 'y'.
-
-    :param spark: Spark session
-    :param file_path: Path to the csv file - the Dataset
-    :return: The Samples - type: Spark DataFrame
-    """
-
-    samplesSchema = StructType([
-        StructField('_c0', IntegerType()),
-        StructField('x', DoubleType()),
-        StructField('y', DoubleType()),
-    ])
-
-    df = spark.read.format("csv") \
-        .option("header", True) \
-        .schema(samplesSchema) \
-        .load(file_path) \
-        .drop("_c0")
-
-    return df
-
-
-def init_models_DF(spark):
-    """
-    Create Models empty template Spark DataFrame
-    :param spark: Spark session
-    :return: Empty Models Spark DF
-    """
-    modelsSchema = StructType([
-        StructField('a', DoubleType()), StructField('b', DoubleType())
-    ])
-
-    df = spark.createDataFrame([], schema=modelsSchema)
-
-    return df
 
 
 def get_random_sample_pairs(samples, num_of_pairs):
@@ -66,7 +21,7 @@ def get_random_sample_pairs(samples, num_of_pairs):
     random_sample_pairs_df = pd.DataFrame(columns=('x1', 'y1', 'x2', 'y2'))
 
     while pairs_to_add > 0:
-        samples_to_take = round_up_to_even(pairs_to_add * 1.005)
+        samples_to_take = pairs_to_add
 
         random_samples_1 = pd.DataFrame(samples.sample(n=samples_to_take, replace=True).values, columns=('x1', 'y1'))
         random_samples_2 = pd.DataFrame(samples.sample(n=samples_to_take, replace=True).values, columns=('x2', 'y2'))
@@ -107,28 +62,20 @@ def create_models_from_sample_pairs(sample_pairs):
     models_data['a'] = (sample_pairs['y1'] - sample_pairs['y2']) / models_data['dx']
     models_data['b'] = sample_pairs['y1'] - sample_pairs['x1'] * models_data['a']
 
-    models_data.drop('dx', axis=1, inplace=True)
+    models_data = models_data.drop('dx', axis=1).reset_index(drop=True)
 
     return models_data
 
 
-def calc_models_scores_against_samples(spark, samples, models, cutoff_dist=20):
-    CASE_NUM = 4
+def calc_models_scores_against_samples(samples, models, cutoff_dist=20, CALC_CASE=2):
+    if CALC_CASE == 1:
+        return modelsDF_map_reduce(samples=samples, models=models, cutoff_dist=cutoff_dist)
 
-    if CASE_NUM == 1:
-        return modelsDF_map_reduce(spark=spark, samples=samples, models=models, cutoff_dist=cutoff_dist)
-
-    if CASE_NUM == 2:
-        return samplesDF_map_reduce(spark=spark, samples=samples, models=models, cutoff_dist=cutoff_dist)
-
-    if CASE_NUM == 3:
-        return samplesDF_modelsDF(spark=spark, samples=samples, models=models, cutoff_dist=cutoff_dist)
-
-    if CASE_NUM == 4:
-        return samplesDF_modelsRDD_map(spark=spark, samples=samples, models=models, cutoff_dist=cutoff_dist)
+    if CALC_CASE == 2:
+        return model_samples_rdd_df(samples=samples, models=models, cutoff_dist=cutoff_dist)
 
 
-def parallel_ransac(file_path, iterations, cutoff_dist):
+def parallel_ransac(file_path, iterations, cutoff_dist, calc_case=2):
     # samples_df = extract_data(spark, file_path)
 
     samples_df = pd.DataFrame(read_samples(file_path))
@@ -140,17 +87,10 @@ def parallel_ransac(file_path, iterations, cutoff_dist):
     with_spark = True
 
     if with_spark:
-        spark, sc = init_spark()
-        result = calc_models_scores_against_samples(spark=spark, samples=samples_df, models=models,
-                                                    cutoff_dist=cutoff_dist)
+        result = calc_models_scores_against_samples(samples=samples_df, models=models,
+                                                    cutoff_dist=cutoff_dist, CALC_CASE=calc_case)
 
     else:
         result = calc_without_spark(models=models, samples=samples_df, cutoff_dist=cutoff_dist)
-
-    #  TODO:  Need This? & Remove
-    # samples_df.persist()
-    # samples_df.printSchema()
-    # samples_df.show(truncate=False)
-
 
     return result

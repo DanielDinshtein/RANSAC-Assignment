@@ -14,7 +14,7 @@ def get_random_sample_pair(samples):
             index = random.randint(0, len(samples) - 1)
             x = samples[index]['x']
             y = samples[index]['y']
-            selected_samples.append({'x': x, 'y': y})
+            selected_samples.append({ 'x': x, 'y': y })
             # print("creator_samples ",i, " : ", creator_samples, " index ", index)
         dx = selected_samples[0]['x'] - selected_samples[1]['x']
 
@@ -37,7 +37,7 @@ def modelFromSamplePair(sample1, sample2):
 
     a = (sample1['y'] - sample2['y']) / dx
     b = sample1['y'] - sample1['x'] * a
-    return {'a': a, 'b': b}
+    return { 'a': a, 'b': b }
 
 
 # create a fit score between a list of samples and a model (a,b) - with the given cutoff distance
@@ -65,11 +65,11 @@ def ransac(samples, iterations, cutoff_dist):
     # 3. keeps the model with the best score
     # after all iterations are done - returns the best model and score
 
-    min_m = {}
+    min_m = { }
     min_score = -1
     for i in range(1, iterations):
-        if i % 10 == 0:
-            print(i)
+        # if i % 10 == 0:
+        #     print(i)
         sample1, sample2 = get_random_sample_pair(samples)
         m = modelFromSamplePair(sample1, sample2)
         score = scoreModelAgainstSamples(m, samples, cutoff_dist)
@@ -78,7 +78,7 @@ def ransac(samples, iterations, cutoff_dist):
             min_score = score
             min_m = m
 
-    return {'model': min_m, 'score': min_score}
+    return { 'model': min_m, 'score': min_score }
 
 
 # ========= utility functions ============
@@ -114,12 +114,12 @@ def generate_samples(n_samples=1000, n_outliers=50, b=1, output_path=None):
         X[:n_outliers] = 2 * np.random.normal(size=(n_outliers, 1))
         y[:n_outliers] = 10 * np.random.normal(size=n_outliers)
 
-    d = {'x': X.flatten(), 'y': y.flatten()}
+    d = { 'x': X.flatten(), 'y': y.flatten() }
     df = pd.DataFrame(data=d)
     samples = []
     for i in range(0, len(X) - 1):
-        samples.append({'x': X[i][0], 'y': y[i]})
-    ref_model = {'a': coef.item(0), 'b': b}
+        samples.append({ 'x': X[i][0], 'y': y[i] })
+    ref_model = { 'a': coef.item(0), 'b': b }
 
     if output_path is not None:
         import os
@@ -151,9 +151,11 @@ def some_basic_pyspark_example():
     # now we create a spark context in local mode (i.e - not on cluster)
     sc = SparkContext("local[{}]".format(num_cores_to_use), "My First App")
 
+
     # function we will use in parallel
     def square_num(x):
         return x * x
+
 
     rdd_of_num = sc.parallelize([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16])
 

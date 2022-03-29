@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 
 from pyspark.sql import SparkSession
+from pyspark.sql.types import StructType, StructField, DoubleType, IntegerType
 
 
 # ========= utility functions ============
@@ -175,3 +176,44 @@ def init_spark():
     sc.setLogLevel("OFF")
 
     return spark, sc
+
+
+def extract_data(spark, file_path):
+    """
+    Read samples from a csv file into Spark DataFrame.
+    Clean unnecessary columns.
+    Each sample contain 'x' and 'y'.
+
+    :param spark: Spark session
+    :param file_path: Path to the csv file - the Dataset
+    :return: The Samples - type: Spark DataFrame
+    """
+
+    samplesSchema = StructType([
+        StructField('_c0', IntegerType()),
+        StructField('x', DoubleType()),
+        StructField('y', DoubleType()),
+    ])
+
+    df = spark.read.format("csv") \
+        .option("header", True) \
+        .schema(samplesSchema) \
+        .load(file_path) \
+        .drop("_c0")
+
+    return df
+
+
+def init_models_DF(spark):
+    """
+    Create Models empty template Spark DataFrame
+    :param spark: Spark session
+    :return: Empty Models Spark DF
+    """
+    modelsSchema = StructType([
+        StructField('a', DoubleType()), StructField('b', DoubleType())
+    ])
+
+    df = spark.createDataFrame([], schema=modelsSchema)
+
+    return df
